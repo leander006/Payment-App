@@ -25,7 +25,19 @@ jobs:
           context: .
           file: ./docker/Dockerfile.user
           push: true
-          tags: bitcoin06/demo-cicd:latest # Replace with your Docker Hub username and repository
+          tags: bitcoin06/demo-cicd:latest
 
       - name: Verify Pushed Image
-        run: docker pull bitcoin06/demo-cicd:latest # Replace with your Docker Hub username and repository
+        run: docker pull bitcoin06/demo-cicd:latest
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            sudo docker pull bitcoin06/demo-cicd:latest
+            sudo docker stop web-app || true
+            sudo docker rm web-app || true
+            sudo docker run -d --name web-app -p 3005:3000 bitcoin06/demo-cicd:latest
