@@ -4,62 +4,61 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "./auth";
 import prisma from "@repo/db/client";
 
-export async function p2pTransaction(to:string,amount:number){
-      const session = await getServerSession(authOptions)
-      const from = session?.user?.id
-      if(!from){
-            return {
-                  message:"User not logged in"
-            }
-      }
+export async function p2pTransaction(to: string, amount: number) {
+  const session = await getServerSession(authOptions);
+  const from = session?.user?.id;
+  if (!from) {
+    return {
+      message: "User not logged in",
+    };
+  }
 
-      const toUser = await prisma.user.findFirst({
-            where:{
-                  number:to
-            }
-      })
+  const toUser = await prisma.user.findFirst({
+    where: {
+      number: to,
+    },
+  });
 
-      if (!toUser) {
-            return {
-                message: "User not found"
-            }
-      }
+  if (!toUser) {
+    return {
+      message: "User not found",
+    };
+  }
 
-      await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT * FROM "Balance" WHERE "userId" = ${Number(from)} FOR UPDATE`;
 
-            await tx.$queryRaw`SELECT * FROM "Balance" WHERE "userId" = ${Number(from)} FOR UPDATE`;
+    const fromBalance = await tx.balance.findUnique({
+      where: {
+        userId: Number(from),
+      },
+    });
+    if (!fromBalance || fromBalance.amount < amount) {
+      throw new Error("Insufficient funds");
+    }
+    console.log("before p2p");
 
-            const fromBalance = await tx.balance.findUnique({
-                  where:{
-                        userId:Number(from)
-                  }
-            })
-            if(!fromBalance || fromBalance.amount < amount){
-                  throw new Error('Insufficient funds');
-            }
-            console.log("before p2p");
-            
-            await new Promise(r => setTimeout(r, 4000));
+    await new Promise((r) => setTimeout(r, 4000));
 
-            console.log("after p2p");
+    console.log("after p2p");
 
-            await tx.balance.update({
-                  where: { userId: Number(from) },
-                  data: { amount: { decrement: amount } },
-            });
-            
-            await tx.balance.update({
-              where: { userId: toUser.id },
-              data: { amount: { increment: amount } },
-            });
+    await tx.balance.update({
+      where: { userId: Number(from) },
+      data: { amount: { decrement: amount } },
+    });
 
-            await tx.p2pTransfer.create({
-                  data: {
-                      fromUserId: Number(from),
-                      toUserId: toUser.id,
-                      amount,
-                      timestamp: new Date()
-                  }
-                })
-      })
+    await tx.balance.update({
+      where: { userId: toUser.id },
+      data: { amount: { increment: amount } },
+    });
+
+    await tx.p2pTransfer.create({
+      data: {
+        fromUserId: Number(from),
+        toUserId: toUser.id,
+        amount,
+        timestamp: new Date(),
+      },
+    });
+  });
 }
