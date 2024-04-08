@@ -20,7 +20,7 @@ export const authOptions = {
       account: {
         provider: "google" | "github";
       };
-    }) {
+    }): Promise<boolean> {
       console.log("hi signin");
       if (!user || !user.email) {
         return false;
